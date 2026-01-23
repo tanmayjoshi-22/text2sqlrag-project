@@ -1189,14 +1189,34 @@ def initialize_services():
         try:
             if settings.OPIK_API_KEY:
                 logger.info("Initializing OPIK monitoring...")
-                from opik import configure
-                configure(api_key=settings.OPIK_API_KEY)
-                logger.info("✓ OPIK monitoring initialized!")
+
+                # Lambda-safe OPIK initialization
+                # Redirect stdin to /dev/null to prevent "EOF when reading a line" errors
+                import os
+                old_stdin = sys.stdin
+                try:
+                    # Open /dev/null for reading (works in Lambda)
+                    devnull = open(os.devnull, 'r')
+                    sys.stdin = devnull
+
+                    # Configure OPIK with API key
+                    from opik import configure
+                    configure(api_key=settings.OPIK_API_KEY)
+
+                    logger.info("✓ OPIK monitoring initialized!")
+                finally:
+                    # Restore original stdin
+                    sys.stdin = old_stdin
+                    try:
+                        devnull.close()
+                    except:
+                        pass
             else:
                 logger.warning("OPIK available but API key not configured.")
                 logger.info("Monitoring will use local tracking only.")
         except Exception as e:
             logger.warning(f"Failed to initialize OPIK: {e}")
+            # Continue without OPIK - this is optional monitoring
     else:
         logger.info("OPIK not available (package not installed).")
 
